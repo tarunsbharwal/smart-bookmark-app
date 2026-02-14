@@ -19,7 +19,7 @@ export default function Home() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(true)
 
-  // Memoized fetch function to remove the red dependency warning
+  // Memoized fetch function to maintain performance
   const fetchBookmarks = useCallback(async () => {
     const { data } = await supabase
       .from('bookmarks')
@@ -29,7 +29,7 @@ export default function Home() {
   }, [supabase])
 
   useEffect(() => {
-    // 1. Check Login Status
+    // 1. Initial Authentication and Data Fetching
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user ?? null)
@@ -39,18 +39,26 @@ export default function Home() {
 
     getUser()
 
-    // 2. REALTIME LISTENER (Requirement #4)
+    // 2. ROBUST REALTIME LISTENER (Requirement #4)
+    // We use a unique room ID to prevent "CLOSED" or "TIMED_OUT" errors
+    const channelId = `bookmarks-sync-${Math.random().toString(36).substring(7)}`
     const channel = supabase
-      .channel('realtime_bookmarks')
+      .channel(channelId)
       .on(
-        'postgres_changes', 
-        { event: '*', schema: 'public', table: 'bookmarks' }, 
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'bookmarks' 
+        },
         (payload) => {
+          console.log('Realtime update received:', payload)
+          
           if (payload.eventType === 'INSERT') {
             const newBookmark = payload.new as Bookmark
-            // Prevent duplicates if optimistic update already added it
             setBookmarks((prev) => {
-              if (prev.find((b) => b.id === newBookmark.id)) return prev
+              // Ensure we don't add the same bookmark twice if the UI already updated
+              if (prev.some((b) => b.id === newBookmark.id)) return prev
               return [newBookmark, ...prev]
             })
           } else if (payload.eventType === 'DELETE') {
@@ -58,18 +66,22 @@ export default function Home() {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        // Log status to F12 Console for verification
+        console.log('Sync Status:', status)
+      })
 
+    // Clean up the subscription to prevent memory leaks
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, fetchBookmarks]) // Added fetchBookmarks here to satisfy TypeScript/ESLint
+  }, [supabase, fetchBookmarks])
 
   const handleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
   }
@@ -84,7 +96,7 @@ export default function Home() {
     e.preventDefault()
     if (!title || !url || !user) return
 
-    // Insert and select the new record to update the UI immediately
+    // Insert new bookmark and fetch back the created row
     const { data, error } = await supabase
       .from('bookmarks')
       .insert({ title, url, user_id: user.id })
@@ -92,9 +104,10 @@ export default function Home() {
       .single()
 
     if (error) {
-      alert(error.message)
+      console.error('Add error:', error.message)
+      alert('Failed to add bookmark. Check console for details.')
     } else if (data) {
-      // Optimistic Update: Add to local state instantly
+      // Optimistic Update: Instantly add to local UI for a fast user experience
       setBookmarks((prev) => [data as Bookmark, ...prev])
       setTitle('')
       setUrl('')
@@ -102,10 +115,11 @@ export default function Home() {
   }
 
   const deleteBookmark = async (id: number) => {
-    await supabase.from('bookmarks').delete().eq('id', id)
+    const { error } = await supabase.from('bookmarks').delete().eq('id', id)
+    if (error) console.error('Delete error:', error.message)
   }
 
-  if (loading) return <div className="p-10 text-center">Loading...</div>
+  if (loading) return <div className="p-10 text-center text-gray-600">Initialising App...</div>
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-black">
@@ -114,10 +128,10 @@ export default function Home() {
 
         {!user ? (
           <div className="text-center">
-            <p className="text-gray-500 mb-4">Save your links and access them anywhere.</p>
+            <p className="text-gray-500 mb-4">Securely save and sync your links in real-time.</p>
             <button
               onClick={handleLogin}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition font-medium"
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
             >
               Sign in with Google
             </button>
@@ -125,8 +139,9 @@ export default function Home() {
         ) : (
           <>
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
-              <span className="text-xs text-gray-500 truncate max-w-[150px]">{user.email}</span>
-              <button onClick={handleLogout} className="text-xs text-red-500 hover:text-red-700 font-medium">Sign Out</button>
+              {/* Removed 'truncate' and 'max-width' to show the full email address */}
+              <span className="text-xs text-gray-400 font-mono">{user.email}</span>
+              <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-600 font-semibold uppercase tracking-wider">Sign Out</button>
             </div>
 
             <form onSubmit={addBookmark} className="mb-8 space-y-3">
@@ -135,7 +150,7 @@ export default function Home() {
                 placeholder="Title (e.g., My Portfolio)"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full border border-gray-300 p-3 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full border border-gray-200 p-3 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder-gray-400"
                 required
               />
               <input
@@ -143,24 +158,24 @@ export default function Home() {
                 placeholder="URL (https://...)"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full border border-gray-300 p-3 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full border border-gray-200 p-3 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder-gray-400"
                 required
               />
-              <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-bold">
+              <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-bold shadow-md">
                 Add Bookmark
               </button>
             </form>
 
             <ul className="space-y-3">
-              {bookmarks.length === 0 && <p className="text-center text-gray-400 text-sm">No bookmarks yet.</p>}
+              {bookmarks.length === 0 && <p className="text-center text-gray-400 text-sm italic">Your list is currently empty.</p>}
               {bookmarks.map((bookmark) => (
-                <li key={bookmark.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <a href={bookmark.url} target="_blank" className="text-blue-600 hover:underline font-medium truncate max-w-[200px]">
+                <li key={bookmark.id} className="flex justify-between items-center bg-white p-4 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                  <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-medium truncate max-w-[200px]">
                     {bookmark.title}
                   </a>
                   <button
                     onClick={() => deleteBookmark(bookmark.id)}
-                    className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1"
+                    className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1"
                   >
                     Delete
                   </button>
