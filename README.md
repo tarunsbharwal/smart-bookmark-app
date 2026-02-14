@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Smart Bookmark App
+A real-time, full-stack bookmarking application built for the Abstrabit Fullstack Micro-Challenge. This app allows users to securely save and manage their favorite links with instant updates across multiple tabs.
 
-## Getting Started
+🚀 Features
+Google Authentication: Secure login using Supabase Auth and Google OAuth.
 
-First, run the development server:
+Private Bookmarks: Each user can only see and manage their own links thanks to Supabase Row Level Security (RLS).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Real-time Synchronization: Bookmark lists update instantly without page refreshes using Supabase Realtime.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Optimistic UI: Added logic to update the local state immediately upon adding a bookmark for a faster user experience.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Responsive Design: Styled with Tailwind CSS for a clean, modern interface.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+🛠️ Tech Stack
+Framework: Next.js (App Router)
 
-## Learn More
+Database & Auth: Supabase
 
-To learn more about Next.js, take a look at the following resources:
+Styling: Tailwind CSS
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Language: TypeScript
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+🧠 Challenges Faced & Solutions
+Directory Structure Errors: Initially, I had nested project directories which caused import path errors (@/lib/supabase not found).
 
-## Deploy on Vercel
+Solution: Reorganized the folder structure and updated relative import paths to ensure all modules were correctly resolved.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Real-time Data Fetching: Ensuring that bookmarks appeared instantly in other tabs required enabling specific database publications in the Supabase SQL editor.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Solution: Executed alter publication supabase_realtime add table bookmarks; and implemented a useEffect hook with a listener for INSERT and DELETE events.
+
+Optimizing for UI Speed: Waiting for the database response made the "Add" action feel slow.
+
+Solution: Implemented optimistic updates in the addBookmark function to reflect changes in the UI immediately while the backend process finished.
