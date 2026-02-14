@@ -1,5 +1,7 @@
 # Smart Bookmark App
 
+**Live Demo:** [https://smart-bookmark-app-bay.vercel.app/](https://smart-bookmark-app-bay.vercel.app/)
+
 This is a full-stack bookmarking app I built for the Abstrabit Fullstack Micro-Challenge. It lets you save your favorite links and syncs them instantly across different tabs and windows using Supabase Realtime.
 
 ## 🚀 Features
